@@ -1,6 +1,6 @@
 # Solar System
 
-##Project Tree Folder
+## Project Tree Folder
 ```
 SolarSystem/
 │
