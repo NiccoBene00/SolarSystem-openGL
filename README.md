@@ -89,3 +89,34 @@ SolarSystem/
 ├── CMakeLists.txt          
 └── glfw3.dll
 ```
+
+---
+
+## Dependencies
+
+The project uses the following libraries:
+
+- **GLFW** → windowing and input  
+- **GLAD** → OpenGL loader  
+- **GLM** → mathematics (vectors, matrices)  
+- **stb_image** → texture loading  
+
+Optional (future):
+- ImGui → UI controls
+
+---
+
+## Requirements
+
+- Windows (tested)
+- C++17 compatible compiler (e.g. `g++`, `clang`, MSVC)
+- CMake ≥ 3.10
+- OpenGL 3.3+
+
+---
+
+## Clone the Repository
+
+```bash
+git clone https://github.com/YOUR_USERNAME/SolarSystem.git
+cd SolarSystem
