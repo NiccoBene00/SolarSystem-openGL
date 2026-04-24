@@ -1,0 +1,10 @@
+# ninja log v7
+11	120	7987498112077738	CMakeFiles/SolarSystem.dir/src/core/framebuffer.cpp.obj	220e42836d8ab6fc
+44	151	7987498112404750	CMakeFiles/SolarSystem.dir/src/rendering/render.cpp.obj	d9f2548a40491c98
+52	165	7987498112489983	CMakeFiles/SolarSystem.dir/src/rendering/sphere.cpp.obj	aef39a4dd68b7bf0
+60	169	7987498112567627	CMakeFiles/SolarSystem.dir/src/utils/texture.cpp.obj	e1fa1ba45b35b43a
+4	838	7987498112007723	CMakeFiles/SolarSystem.dir/src/core/camera.cpp.obj	6c640a5d8bc4d250
+19	1072	7987498112159878	CMakeFiles/SolarSystem.dir/src/core/shader.cpp.obj	f9465035d620744e
+26	1104	7987498112229895	CMakeFiles/SolarSystem.dir/src/glad.c.obj	3ae5e7d6010c7989
+35	1131	7987498112319024	CMakeFiles/SolarSystem.dir/src/main.cpp.obj	5d399ecbe3e160d
+1132	1343	7987498123286506	SolarSystem.exe	467028399f400e21
