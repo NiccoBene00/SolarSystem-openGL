@@ -120,6 +120,7 @@ Optional (future):
 ```bash
 git clone https://github.com/YOUR_USERNAME/SolarSystem.git
 cd SolarSystem
+```
 
 ---
 
@@ -129,15 +130,19 @@ Create build directory
 ```bash
 mkdir build
 cd build
+```
 
 Generate project files
 ```bash
 cmake ..
+```
 
 Compile
 ```bash
 cmake --build .
+```
 
 Run the project
 ```bash
 ./SolarSystem.exe
+```
