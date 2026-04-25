@@ -5,6 +5,7 @@
 
 #include "core/shader.h"
 #include "core/camera.h"
+#include "rendering/sphere.h"
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -86,6 +87,8 @@ int main()
          0.0f,  0.5f, 0.0f
     };
 
+    Sphere sphere;
+
     unsigned int VAO, VBO;
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
@@ -130,7 +133,8 @@ int main()
 
         // draw
         glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        
+        sphere.Draw();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
