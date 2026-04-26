@@ -80,6 +80,8 @@ int main()
     // ---------------------------
     Shader shader("../shaders/scene.vert", "../shaders/scene.frag");
     Shader screenShader("../shaders/quad.vert", "../shaders/quad.frag");
+    Shader blurShader("../shaders/blur.vert", "../shaders/blur.frag");
+    Shader finalShader("../shaders/quad.vert", "../shaders/bloom_final.frag");
 
     Sphere sphere;
 
@@ -158,6 +160,30 @@ int main()
 
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    
+    unsigned int pingpongFBO[2];
+    unsigned int pingpongColorbuffers[2];
+
+    glGenFramebuffers(2, pingpongFBO);
+    glGenTextures(2, pingpongColorbuffers);
+
+    for (unsigned int i = 0; i < 2; i++)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
+
+        glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F,
+            SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+            GL_TEXTURE_2D, pingpongColorbuffers[i], 0);
+    }
+    
     // ---------------------------
     // RENDER LOOP
     // ---------------------------
@@ -170,24 +196,17 @@ int main()
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        // ---------------------------
-        // INPUT
-        // ---------------------------
         processInput(window);
 
-        // ---------------------------
-        // CLEAR
-        // ---------------------------
+        // =====================================================
+        // 1. RENDER SCENE → HDR FRAMEBUFFER
+        // =====================================================
         glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
-        glClearColor(0.05f, 0.05f, 0.1f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // ---------------------------
-        // SHADER BASE SETUP
-        // ---------------------------
         shader.use();
 
-        // global matrix
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom),
             (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
@@ -196,38 +215,25 @@ int main()
         shader.setMat4("projection", projection);
         shader.setMat4("view", view);
 
-        // camera and global light
         shader.setVec3("viewPos", camera.Position);
+        shader.setVec3("lightPos", glm::vec3(0.0f));
 
-        glm::vec3 lightPos(0.0f, 0.0f, 0.0f);
-        shader.setVec3("lightPos", lightPos);
-
-        // texture slot
         shader.setInt("diffuseMap", 0);
-
         glActiveTexture(GL_TEXTURE0);
 
-        // =====================================================
-        // DRAW SUN
-        // =====================================================
+        //  SUN
         {
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::scale(model, glm::vec3(1.5f));
 
             shader.setMat4("model", model);
-
-            // emissivive
             shader.setInt("isEmissive", 1);
 
-            // texture sun
             glBindTexture(GL_TEXTURE_2D, sunTexture);
-
             sphere.Draw();
         }
 
-        // =====================================================
-        // DRAW EARTH
-        // =====================================================
+        //  EARTH
         {
             float time = glfwGetTime();
             float radius = 3.0f;
@@ -236,45 +242,71 @@ int main()
             float z = cos(time) * radius;
 
             glm::mat4 model = glm::mat4(1.0f);
-
-            // orbits
             model = glm::translate(model, glm::vec3(x, 0.0f, z));
-
-            // rotation on itself
             model = glm::rotate(model, time * 2.0f, glm::vec3(0.0f, 1.0f, 0.0f));
-
             model = glm::scale(model, glm::vec3(0.5f));
 
             shader.setMat4("model", model);
-
-            // not emissive
             shader.setInt("isEmissive", 0);
 
-            // texture earth
             glBindTexture(GL_TEXTURE_2D, earthTexture);
-
             sphere.Draw();
         }
 
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        // =====================================================
+        // 2. BLUR BRIGHT BUFFER (PING-PONG)
+        // =====================================================
+        bool horizontal = true, first_iteration = true;
+        int amount = 10;
+
+        blurShader.use();
+
+        for (int i = 0; i < amount; i++)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
+
+            blurShader.setInt("horizontal", horizontal);
+
+            glBindTexture(GL_TEXTURE_2D,
+                first_iteration ? colorBuffers[1] : pingpongColorbuffers[!horizontal]);
+
+            glBindVertexArray(quadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+
+            horizontal = !horizontal;
+
+            if (first_iteration)
+                first_iteration = false;
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // =====================================================
+        // 3. FINAL COMBINE (SCENE + BLOOM)
+        // =====================================================
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glDisable(GL_DEPTH_TEST);
 
-        screenShader.use();
+        finalShader.use();
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, colorBuffers[0]);
-        screenShader.setInt("scene", 0);
+        finalShader.setInt("scene", 0);
+
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, pingpongColorbuffers[!horizontal]);
+        finalShader.setInt("bloomBlur", 1);
+
+        finalShader.setBool("bloom", true);
+        finalShader.setFloat("exposure", 1.0f);
 
         glBindVertexArray(quadVAO);
         glDrawArrays(GL_TRIANGLES, 0, 6);
 
         glEnable(GL_DEPTH_TEST);
-        
-        // ---------------------------
-        // SWAP
-        // ---------------------------
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
