@@ -49,7 +49,15 @@ void Sphere::setupMesh(unsigned int X_SEGMENTS, unsigned int Y_SEGMENTS)
         }
     }
 
-    bool oddRow = false;
+    //TRIANGLE STRIP: a way to draw connected triangles efficiently (less memory, faster, better GPU cache)
+    //by reusing vertices
+
+    //Indeed the sphere is built as a grid of rows (latitude) and columns (longitudes)
+    //Each row is connected to the next one by a strip of triangles
+
+    bool oddRow = false; //this trick is used to create a zig-zag pattern of indices, otherwise we would have to duplicate
+                        //vertices at the end of each row to connect them properly, which would increase memory usage and reduce performance
+                        //In this way the strip doesn't need to restart at the end of each row but it can continue continuosly
     for (unsigned int y = 0; y < Y_SEGMENTS; ++y)
     {
         if (!oddRow)
@@ -73,15 +81,18 @@ void Sphere::setupMesh(unsigned int X_SEGMENTS, unsigned int Y_SEGMENTS)
 
     indexCount = indices.size();
 
+    //buffer generation
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
     glGenBuffers(1, &EBO);
 
     glBindVertexArray(VAO);
 
+    //vertex data loading
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, data.size() * sizeof(float), &data[0], GL_STATIC_DRAW);
 
+    //index data loading
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
 

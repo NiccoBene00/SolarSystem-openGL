@@ -6,6 +6,7 @@
 #include "core/shader.h"
 #include "core/camera.h"
 #include "rendering/sphere.h"
+#include "utils/texture.h"
 
 // settings
 const unsigned int SCR_WIDTH = 1280;
@@ -33,6 +34,7 @@ void processInput(GLFWwindow* window);
 
 int main()
 {
+
     // ---------------------------
     // INIT GLFW
     // ---------------------------
@@ -74,68 +76,205 @@ int main()
     glEnable(GL_DEPTH_TEST);
 
     // ---------------------------
-    // SHADER (placeholder)
+    // SHADER 
     // ---------------------------
     Shader shader("../shaders/scene.vert", "../shaders/scene.frag");
-
-    // ---------------------------
-    // TRIANGLE DATA (placeholder)
-    // ---------------------------
-    float vertices[] = {
-        -0.5f, -0.5f, 0.0f,
-         0.5f, -0.5f, 0.0f,
-         0.0f,  0.5f, 0.0f
-    };
+    Shader screenShader("../shaders/quad.vert", "../shaders/quad.frag");
 
     Sphere sphere;
 
-    unsigned int VAO, VBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
+    //TEXTURE LOADING
+    unsigned int earthTexture = loadTexture("resources/textures/earth.jpg");
+    unsigned int sunTexture = loadTexture("resources/textures/sun.jpg");
 
-    glBindVertexArray(VAO);
+    // ============================
+    // HDR FRAMEBUFFER
+    // ============================
+    unsigned int hdrFBO;
+    glGenFramebuffers(1, &hdrFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    // 2 color buffers
+    unsigned int colorBuffers[2];
+    glGenTextures(2, colorBuffers);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    for (unsigned int i = 0; i < 2; i++)
+    {
+        glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F,
+            SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER,
+            GL_COLOR_ATTACHMENT0 + i,
+            GL_TEXTURE_2D,
+            colorBuffers[i],
+            0);
+    }
+
+    // depth buffer
+    unsigned int rboDepth;
+    glGenRenderbuffers(1, &rboDepth);
+    glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+
+    // specifica che usiamo 2 color attachments
+    unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+    glDrawBuffers(2, attachments);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cout << "Framebuffer not complete!" << std::endl;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    unsigned int quadVAO = 0;
+    unsigned int quadVBO;
+
+    float quadVertices[] = {
+        // positions   // texCoords
+        -1.0f,  1.0f, 0.0f, 1.0f,
+        -1.0f, -1.0f, 0.0f, 0.0f,
+        1.0f, -1.0f, 1.0f, 0.0f,
+
+        -1.0f,  1.0f, 0.0f, 1.0f,
+        1.0f, -1.0f, 1.0f, 0.0f,
+        1.0f,  1.0f, 1.0f, 1.0f
+    };
+
+    glGenVertexArrays(1, &quadVAO);
+    glGenBuffers(1, &quadVBO);
+
+    glBindVertexArray(quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+
     glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
 
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     // ---------------------------
     // RENDER LOOP
     // ---------------------------
     while (!glfwWindowShouldClose(window))
     {
-        // timing
+        // ---------------------------
+        // TIMING
+        // ---------------------------
         float currentFrame = glfwGetTime();
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
+        // ---------------------------
+        // INPUT
+        // ---------------------------
         processInput(window);
 
-        // clear
+        // ---------------------------
+        // CLEAR
+        // ---------------------------
+        glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
         glClearColor(0.05f, 0.05f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // shader
+        // ---------------------------
+        // SHADER BASE SETUP
+        // ---------------------------
         shader.use();
 
-        // matrices
+        // global matrix
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom),
             (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
         glm::mat4 view = camera.GetViewMatrix();
-        glm::mat4 model = glm::mat4(1.0f);
 
         shader.setMat4("projection", projection);
         shader.setMat4("view", view);
-        shader.setMat4("model", model);
 
-        // draw
-        glBindVertexArray(VAO);
+        // camera and global light
+        shader.setVec3("viewPos", camera.Position);
+
+        glm::vec3 lightPos(0.0f, 0.0f, 0.0f);
+        shader.setVec3("lightPos", lightPos);
+
+        // texture slot
+        shader.setInt("diffuseMap", 0);
+
+        glActiveTexture(GL_TEXTURE0);
+
+        // =====================================================
+        // DRAW SUN
+        // =====================================================
+        {
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::scale(model, glm::vec3(1.5f));
+
+            shader.setMat4("model", model);
+
+            // emissivive
+            shader.setInt("isEmissive", 1);
+
+            // texture sun
+            glBindTexture(GL_TEXTURE_2D, sunTexture);
+
+            sphere.Draw();
+        }
+
+        // =====================================================
+        // DRAW EARTH
+        // =====================================================
+        {
+            float time = glfwGetTime();
+            float radius = 3.0f;
+
+            float x = sin(time) * radius;
+            float z = cos(time) * radius;
+
+            glm::mat4 model = glm::mat4(1.0f);
+
+            // orbits
+            model = glm::translate(model, glm::vec3(x, 0.0f, z));
+
+            // rotation on itself
+            model = glm::rotate(model, time * 2.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+
+            model = glm::scale(model, glm::vec3(0.5f));
+
+            shader.setMat4("model", model);
+
+            // not emissive
+            shader.setInt("isEmissive", 0);
+
+            // texture earth
+            glBindTexture(GL_TEXTURE_2D, earthTexture);
+
+            sphere.Draw();
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glDisable(GL_DEPTH_TEST);
+
+        screenShader.use();
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, colorBuffers[0]);
+        screenShader.setInt("scene", 0);
+
+        glBindVertexArray(quadVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
+        glEnable(GL_DEPTH_TEST);
         
-        sphere.Draw();
-
+        // ---------------------------
+        // SWAP
+        // ---------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
